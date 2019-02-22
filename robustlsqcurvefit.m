@@ -83,11 +83,15 @@ function [varargout] = robustlsqcurvefit(fun, x0, xdata, ydata, lb, ub, weightMe
 % Author:  J.-A. Adrian (JA) <jensalrik.adrian AT gmail.com>
 % Date  :  05-May-2017 11:27
 %
+% Modified by: M. Hirano <masahiro.dll AT gmail.com>
+% Date  :  22-Deb-2019
+%
 
 % History:  v0.1.0  initial version, 05-May-2017 (JA)
 %           v0.2.0  fix bugs, update documentation, 07-May-2017 (JA)
 %           v0.2.1  update documentation, 07-May-2017 (JA)
 %           v0.2.2  update version info, 07-May-2017 (JA)
+%           v0.3.0  accept cell array in xdata and ydata
 %
 
 
@@ -95,7 +99,7 @@ if nargin < 8 || isempty(options)
     options = optimset(@lsqcurvefit);
 end
 if nargin < 7 || isempty(weightMethod)
-    weightMethod = 'bisquare';
+    weightMethod = 'huber';
 end
 if nargin < 6
     ub = [];
@@ -110,23 +114,27 @@ end
 [weightMethod] = ...
     validateInputArguments(fun, x0, xdata, ydata, lb, ub, weightMethod, options);
 
-convergenceThreshold = 1e-6;
+convergenceThreshold = 1e-1;
 
 varargout = cell(max(nargout, 1), 1);
 
-xdata = xdata(:);
-ydata = ydata(:);
+xdata = xdata(:); % flatten to 1d column vector
+ydata = ydata(:); % flatten to 1d column vector
 
 [weightFunction, tuningConstant] = weightFunAndConstant(weightMethod);
 
 hasConverged     = false;
 previousEstimate = inf(size(x0));
-weights          = ones(size(xdata));
+weights          = ones(numel(xdata(:,1)),1);
 iterationCounter = 1;
 while ~hasConverged && iterationCounter < options.MaxIter
+    %%% Formatting xdata and ydata (1d column cell arrays)
+    if iscell(xdata); xdata = cell2mat(xdata); end
+    if iscell(ydata); ydata = cell2mat(ydata); end
+    
     %%% weighted LSQ
     weightedFun = ...
-        @(params) (fun(params, xdata) - ydata) .* weights;
+        @(params) vecnorm( ((fun(params, xdata) - ydata) .* weights)', 2)';
     
     [varargout{:}] = ...
         lsqnonlin(weightedFun, x0, lb, ub, options);
@@ -135,7 +143,7 @@ while ~hasConverged && iterationCounter < options.MaxIter
     hasConverged = norm(thisEstimate - previousEstimate)^2 < convergenceThreshold;
     
     %%% update weights
-    residuals = ydata - fun(thisEstimate, xdata);
+    residuals = vecnorm( (ydata - fun(thisEstimate, xdata))',2 );
     residuals = residuals(:);
     
     residualLeverages = leverage(residuals);
@@ -186,8 +194,8 @@ validateattributes(...
 
 validateattributes(...
     xdata, ...
-    {'numeric'}, ...
-    {'vector', 'nonempty', 'finite'}, ...
+    {'numeric', 'cell'}, ...
+    {'2d', 'nonempty'}, ...
     mfilename, ...
     'xdata', ...
     3 ...
@@ -195,8 +203,8 @@ validateattributes(...
 
 validateattributes(...
     ydata, ...
-    {'numeric'}, ...
-    {'vector', 'nonempty', 'finite'}, ...
+    {'numeric', 'cell'}, ...
+    {'2d', 'nonempty'}, ...
     mfilename, ...
     'ydata', ...
     4 ...
