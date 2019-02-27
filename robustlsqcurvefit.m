@@ -114,7 +114,7 @@ end
 [weightMethod] = ...
     validateInputArguments(fun, x0, xdata, ydata, lb, ub, weightMethod, options);
 
-convergenceThreshold = 1e-1;
+convergenceThreshold = 1e-3;
 
 varargout = cell(max(nargout, 1), 1);
 
